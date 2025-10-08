@@ -15,6 +15,7 @@
 #import "LayoutManagerExtension.h"
 #import "ZeroWidthSpaceUtils.h"
 #import "ParagraphAttributesUtils.h"
+#import <React/RCTScrollViewComponentView.h>
 
 using namespace facebook::react;
 
@@ -1188,6 +1189,34 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 // so all the logic is in anyTextMayHaveBeenModified
 - (void)textViewDidChange:(UITextView *)textView {
   [self anyTextMayHaveBeenModified];
+}
+
+// MARK: - RN specific methods
+
+// nested scrolling fix, inspired by
+// https://github.com/facebook/react-native/blob/e32307e0540c5dd38093370a9ee69fa7b761fbad/packages/react-native/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm#L147-L170
+- (void)reactUpdateResponderOffsetForScrollView:(RCTScrollViewComponentView *)scrollView
+{
+  if (![self isDescendantOfView:scrollView.scrollView] || ![textView isFirstResponder]) {
+    // view is outside scroll view or it's not a first responder
+    scrollView.firstResponderViewOutsideScrollView = textView;
+    return;
+  }
+  
+  NSRange selectedRange = textView.selectedRange;
+  UITextPosition *startPosition = [textView positionFromPosition:textView.beginningOfDocument offset:selectedRange.location];
+  UITextPosition *endPosition = [textView positionFromPosition:startPosition offset:selectedRange.length];
+  UITextRange *selectedTextRange = [textView textRangeFromPosition:startPosition toPosition:endPosition];
+  UITextSelectionRect *selection = [textView selectionRectsForRange:selectedTextRange].firstObject;
+  CGRect focusRect;
+  if (selection == nil) {
+    // no active selection or caret - fallback to entire input frame
+    focusRect = self.bounds;
+  } else {
+    // focus on text selection frame
+    focusRect = selection.rect;
+  }
+  scrollView.firstResponderFocus = [self convertRect:focusRect toView:nil];
 }
 
 @end
